@@ -1,4 +1,5 @@
 import math
+import os
 import zlib  # decompressing if needed
 import struct  # parsing
 import cv2
@@ -8,12 +9,17 @@ from PIL import Image
 from RSA_keys import Key
 from RSA_keys import nt
 import sys
+from urllib.parse import unquote #url decode
+import base64 # decode base 64
+from xml.etree import ElementTree as ET # string to xml file
+import xml.dom.minidom as md # beutify xml
+import os
 '''
     tornado.png -> with PLTE chunk
     dice.png -> with tIME, gAMA
 '''
 
-file_name = 'PNGs/' + 'ball.png'  # new encrypted file
+file_name = 'PNGs/' + 'diagram2.png'  # new encrypted file
 
 # file_name = 'PNGs/' + 'ball.png'
 # file_name = 'PNGs/' + 'dice.png'
@@ -137,17 +143,51 @@ if PLTE_present:
 ########### Optional chunks ##########
 
 ##### tEXt chunk ##########
+########### Optional chunks ##########
+
+##### tEXt chunk ##########
+
+def xml_decode(x_text: str):
+    x_text = unquote(x_text)  # url decode
+    begin_xml = 0
+    end_xml = 0
+    char_index = 0
+    while end_xml == 0:
+        if x_text[char_index - 1] == '>' and x_text[char_index] != '<':
+            begin_xml = char_index
+        if begin_xml != 0 and x_text[char_index] == '<':
+            end_xml = char_index
+        char_index += 1
+    x_text = x_text[begin_xml:end_xml]
+    x_text = base64.b64decode(x_text)  # decode base64
+    x_text = zlib.decompress(x_text, -15)  # decompress base 64 string
+    x_text = x_text.decode('utf-8', 'replace')  # decode utf-8
+    x_text = unquote(x_text)  # url decode
+    index_xml = 0
+    dom = md.parseString(x_text)
+    x_text = dom.toprettyxml()
+    x_text = os.linesep.join([s for s in x_text.splitlines()
+                            if s.strip()])
+    return x_text
+
+
 if tEXt_present:
     while index >= 0:
         try:
             key, text = tEXt_data[index].split(b'\x00', 1)
             key = key.decode('utf-8', 'replace')
             text = text.decode('utf-8', 'replace')
+            if key == 'mxfile':
+                text = xml_decode(text)
+                xml_text = ET.XML(text)  # umożliwia wpisanie do pliku xml
+                with open(file_name[:-4]+".xml", "wb") as f:
+                    f.write(ET.tostring(xml_text))
         except ValueError:
             key = None
-            text = tEXt_data.decode('utf-8', 'replace')
+            value = tEXt_data.decode('utf-8', 'replace')
         print(f'\n(*) tEXt info, {key}: {text}')
         index -= 1
+
 
 
 ##### tIME chunk ##########
